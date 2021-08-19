@@ -6,7 +6,7 @@ Imagine using this inside a search, for example in a monte carlo tree search or 
 
 # What is in the book?
 
-There are several types of "end result". It can be a WLD data base (win/loss/draw). It can also be a DTM database (depth to mate), which tells you how long it takes to win (or lose) from this state. 
+There are several types of "end result". It can be a WLD database (win/loss/draw). It can also be a DTM database (depth to mate), which tells you how long it takes to win (or lose) from this state. 
 For oware we are using neither of those two. 
 
 We are interested in how much net-score you can gain from a gamestate. Gamestates are "scoreless" in this sense. The current score doesn't matter for the lookup itself. For example, say the current score is 21-20 and the lookup tells you -3, you know the second player has won, because he is only 1 behind and will gain a net 3 points. But if the score is 24-17, player 1 still wins.
