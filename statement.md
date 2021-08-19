@@ -34,15 +34,15 @@ The more seeds are on the board, the more states are possible. With 1 seed on th
 | 10                           | 352716                    | 646645     |
 
 
-I've been able to generate books with a maximum of 9 seeds on the board in half a second. Having a maximum of 9 seeds will give you nearly 300k states. However, since we need to know their net score for every amount of turns left, you have to multiply by another 200. In the end this comes down to a total of roughly 60 million gamestates. You can reduce this a little bit once you realize state values repeat after a certain number of turns left. For 9 seeds this happens at 146 tur
+I've been able to generate books with a maximum of 9 seeds on the board in half a second. Having a maximum of 9 seeds will give you nearly 300k states. However, since we need to know their net score for every amount of turns left, you have to multiply by another 200. In the end this comes down to a total of roughly 60 million gamestates. You can reduce this a little bit once you realize state values repeat after a certain number of turns left. For 9 seeds this happens at 146 turns left.
 
-Also this is a slight overestimation of the number of states, because some states can't be reached. For example, the player that has just moved always has to have at least 1 empty hole. We ignore this to simplify things. 
+Also this number is a slight overestimation of the number of states, because some states can't be reached. For example, the player that has just moved always has to have at least 1 empty hole. We ignore this to simplify things. 
 
 # Indexing the lookups
 
 When you generate the endgame book, you need to store it somehow. It is possible to hash the gamestate and use a hashtable like c++'s unordered map, or your own implementation of a hashtable. However, this will be extremely slow. It's better to use a so-called index-function. That way you have the data in an array that is as compact as possible. An array lookup is much faster than a hashtable. During the generation of the book, you also keep using earlier calculated results, so lookups will be the main bottleneck.
 
-Index functions are quite complicated however. It took a lot of thinking for me to figure out a good one for oware. The first order of business is to create a way to count the number of possible states. The result of this you can see in the table above. Run the code below to see how this works.
+Index functions are quite complicated however. It took a lot of thinking for me to figure out a good one for oware. The first order of business is to create a way to count the number of possible states. The result of this you can see in the table above. Run the code below to see how this works. The code uses math, but I would not know how to explain it quickly. It is basic math however and just calculates the amount of ways you can distribute x seeds over y pits. The reason I kept the number of pits variable will become clear later. Most of what you see in the function are factorials. This type of math easily overflows, which is why the function looks a little weird and has 64 bit integers. 
 
 ```C++ runnable
 #include <iostream>
@@ -82,4 +82,79 @@ int main()
 	} 
 }
 
+```
+
+# Caching state counts
+
+We will have to count states a lot, so it's better to cache the result. During the use of the index function we go through the board from pit 0 to 11. On each pit we have to ask the question, how many distributions of seeds are still possible with the remaining pits (index larger than the current pit). The function below fills an array that caches this result. 
+
+```C++
+void FillStateCountLookups()
+{
+	for (int left = 0; left <= END_GAME_SEEDS; left++) // how many seeds are left to distribute
+	{
+		for (int house = 0; house < 11; house++)
+		{
+			for (int seeds = 0; seeds <= left; seeds++) // how many seeds are in the current pit
+			{
+				uint64_t index = 0;
+				for (int j = 0; j < seeds; j++)
+				{
+					uint64_t stateCount = StateCounter(11 - house, left - j);
+					index += stateCount;
+				}
+
+				stateCounts[left][seeds][house] = index;
+			}
+		}
+	}
+}
+
+```
+
+It is quite difficult to understand how this indexing works, but let's try to use a 3 pit, 3 seed example.
+
+say we're walking through the pits 0 to 11 and we're at pit 9. We still have 3 seeds to distribute. The indexing is done as follows:
+
+| pit 1 | pit 2  | pit 3  | index |
+|-------|--------|--------|-------|
+| 0     | 0      | 3      | 0     |
+| 0     | 1      | 2      | 1     |
+| 0     | 2      | 1      | 2     |
+| 0     | 3      | 0      | 3     |
+| 1     | 0      | 2      | 4     |
+| 1     | 1      | 1      | 5     |
+| 1     | 2      | 0      | 6     |
+| 2     | 0      | 1      | 7     |
+| 2     | 1      | 0      | 8     |
+| 3     | 0      | 0      | 9     |
+
+We walk through the pit, starting at 1. If we place 0 seeds in pit 1 and 2, we *must* place 3 seeds in pit 3. This is the lowest state, with index 0. We store this state. 
+
+Next we make a state with 1 seed in pit 2. That means the remaining seeds go in pit 3. The total number of states stored so far is 1, so the index of this is 1. We keep doing this until we have to start changing pit 1. When we pick 1 seed for pit 1, pit 2 and 3 will have fewer possible configurations. In effect you get this table for the remaining two pits:
+
+| pit 2 | pit 3  | index |
+|-------|--------|-------|
+| 0     | 2      | 0     |
+| 1     | 1      | 1     |
+| 2     | 0      | 2     |
+
+Because there are 3 ways to do this, there are 3 states with 1 seed in pit 1. The sub-results of index 0,1,2 are added, leading to indices 4, 5 and 6. And so on. Hopefully this gives some idea of how it works. As I said, it's complicated.
+
+The final code for the index function is as follows: 
+
+```c++
+uint64_t IndexFunction(uint64_t state, int total) // assume state has pits with 31 seeds max, spaced as 5 bit
+{
+	uint64_t index = 0;
+	int left = total;
+
+	for (int house = 0; house < 11; house++)
+	{
+		int seeds = 31 & (state >> (house * 5));
+		index += stateCounts[left][seeds][house];
+		left -= seeds;
+	}
+	return index;
+}
 ```
