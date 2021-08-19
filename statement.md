@@ -109,7 +109,6 @@ void FillStateCountLookups()
 }
 
 ```
-
 It is quite difficult to understand how this indexing works, but let's try to use a 3 pit, 3 seed example.
 
 say we're walking through the pits 0 to 11 and we're at pit 9. We still have 3 seeds to distribute over pits 9 to 11. Then we might as well say there are only 3 pits and they are numbered 1 to 3 The indexing is done as follows:
@@ -209,7 +208,6 @@ void PrintBoard(uint64_t board)
 	std::cerr << oppBoard << endl;
 	std::cerr << myBoard << endl;
 }
-
 
 int main()
 {
