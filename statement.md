@@ -161,7 +161,7 @@ My oware boardstate is always fully contained in a 64 bit integer. This makes th
 # Generating the gamestates
 
 The recursive function below is used to generate the states. It is quite simple to understand. We again walk through the pits, trying all possible amounts of seeds for the current pit and recursively finishing the state. You call the function by starting with an empty board and at house index 0. The "seedsLeft" variable has to be whatever amount of seeds you want there to be on the board. You can run the code, but be careful not to call the function with too many seeds. You'll get an enormous amount of output.
-```c++
+```C++ runnable
 #include <iostream>
 #include <string>
 
