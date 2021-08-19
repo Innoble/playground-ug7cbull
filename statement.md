@@ -6,15 +6,14 @@ Imagine using this inside a search, for example in a monte carlo tree search or 
 
 # What is in the book?
 
-There are several types of "end result". It can be a WLD database (win/loss/draw). It can also be a DTM database (depth to mate), which tells you how long it takes to win (or lose) from this state. 
+There are several types of "end result". It can be a WLD data base (win/loss/draw). It can also be a DTM database (depth to mate), which tells you how long it takes to win (or lose) from this state. 
 For oware we are using neither of those two. 
 
 We are interested in how much net-score you can gain from a gamestate. Gamestates are "scoreless" in this sense. The current score doesn't matter for the lookup itself. For example, say the current score is 21-20 and the lookup tells you -3, you know the second player has won, because he is only 1 behind and will gain a net 3 points. But if the score is 24-17, player 1 still wins.
 
 # Turn limit
 
-Oware has a turn limit (200 turns). I use the word turn to mean "ply" here for those who know the lingo, just a single move by either player. This turn limit makes things a bit more complicated. When a gamestate has only 1 turn left, the net score will often be different than when it has 2 turns left.  
-Depending on the number of seeds on the board, the turn limit may have effect even when 100+ turns are left to play. Oware has very long strategies and if the game ends halfway through one of them, then not all points will have been scored.
+Oware has a turn limit (200 turns). I use the word turn to mean "ply" here for those who know the lingo, just a single move by either player. This turn limit makes things a bit more complicated. When a gamestate has only 1 turn left, the net score will often be different than when it has 2 turns left. Depending on the number of seeds on the board, the turn limit may have effect even when 100+ turns are left to play. Oware has very long strategies and if the game ends halfway through one of them, then not all points will have been scored.
 
 # Seed count
 
@@ -114,7 +113,7 @@ void FillStateCountLookups()
 
 It is quite difficult to understand how this indexing works, but let's try to use a 3 pit, 3 seed example.
 
-say we're walking through the pits 0 to 11 and we're at pit 9. We still have 3 seeds to distribute. The indexing is done as follows:
+say we're walking through the pits 0 to 11 and we're at pit 9. We still have 3 seeds to distribute over pits 9 to 11. Then we might as well say there are only 3 pits and they are numbered 1 to 3 The indexing is done as follows:
 
 | pit 1 | pit 2  | pit 3  | index |
 |-------|--------|--------|-------|
@@ -129,7 +128,7 @@ say we're walking through the pits 0 to 11 and we're at pit 9. We still have 3 s
 | 2     | 1      | 0      | 8     |
 | 3     | 0      | 0      | 9     |
 
-We walk through the pit, starting at 1. If we place 0 seeds in pit 1 and 2, we *must* place 3 seeds in pit 3. This is the lowest state, with index 0. We store this state. 
+We walk through the pits, starting at 1. If we place 0 seeds in pit 1 and 2, we *must* place 3 seeds in pit 3. This is the lowest state, with index 0. We store this state. 
 
 Next we make a state with 1 seed in pit 2. That means the remaining seeds go in pit 3. The total number of states stored so far is 1, so the index of this is 1. We keep doing this until we have to start changing pit 1. When we pick 1 seed for pit 1, pit 2 and 3 will have fewer possible configurations. In effect you get this table for the remaining two pits:
 
@@ -151,10 +150,75 @@ uint64_t IndexFunction(uint64_t state, int total) // assume state has pits with 
 
 	for (int house = 0; house < 11; house++)
 	{
-		int seeds = 31 & (state >> (house * 5));
-		index += stateCounts[left][seeds][house];
-		left -= seeds;
+		int seeds = 31 & (state >> (house * 5)); // the number of seeds on the house.
+		index += stateCounts[left][seeds][house]; // increasing the total index.
+		left -= seeds; // less seeds left to distribute.
 	}
 	return index;
+}
+```
+
+My oware boardstate is always fully contained in a 64 bit integer. This makes things complicated when there are more than 31 seeds in a pit, as you only have 5 bits per pit. I use the 4 bits that are left (12*5 = 60), to handle the overflow. For our purposes, this does not matter. We are only looking at low seedcounts.  
+
+# Generating the gamestates
+
+The recursive function below is used to generate the states. It is quite simple to understand. We again walk through the pits, trying all possible amounts of seeds for the current pit and recursively finishing the state.
+```c++
+#include <iostream>
+#include <string>
+
+using namespace std;
+
+void PrintBoard(uint64_t board)
+{
+	string myBoard = "";
+	string oppBoard = "";
+	for (int i = 0; i < 6; i++)
+	{
+		int seeds = (board >> (i * 5)) & 31;
+		if (seeds == 31)
+			seeds += board >> 60;
+
+		myBoard += to_string(seeds) + " ";
+	}
+
+	for (int i = 11; i >= 6; i--)
+	{
+		int seeds = (board >> (i * 5)) & 31;
+		if (seeds == 31)
+			seeds += board >> 60;
+		oppBoard += to_string(seeds) + " ";
+	}
+
+	std::cerr << oppBoard << endl;
+	std::cerr << myBoard << endl;
+}
+
+uint64_t allBoards[10000000] = { 0 };
+int stateCount = 0;
+
+void GenerateStates(int seedsLeft, uint64_t board, int house)
+{
+	if (house < 11)
+	{
+		for (int i = 0; i <= seedsLeft; i++)
+			GenerateStates(seedsLeft - i, board | (uint64_t)i << (house * 5), house + 1);
+	}
+	else
+	{
+		board |= (uint64_t)seedsLeft << 55;
+		allBoards[stateCount++] = board;
+	}
+}
+
+int main()
+{
+	GenerateStates(1, 0, 0);
+
+	for (int i = 0; i < stateCount; i++)
+	{
+		cerr << "index: " << i << endl;
+		PrintBoard(allBoards[i]);		
+	}
 }
 ```
