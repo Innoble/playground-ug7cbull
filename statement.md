@@ -82,7 +82,6 @@ int main()
 }
 
 ```
-
 # Caching state counts
 
 We will have to count states a lot, so it's better to cache the result. During the use of the index function we go through the board from pit 0 to 11. On each pit we have to ask the question, how many distributions of seeds are still possible with the remaining pits (index larger than the current pit). The function below fills an array that caches this result. 
@@ -169,6 +168,23 @@ The recursive function below is used to generate the states. It is quite simple 
 
 using namespace std;
 
+uint64_t allBoards[10000000] = { 0 };
+int stateCount = 0;
+
+void GenerateStates(int seedsLeft, uint64_t board, int house)
+{
+	if (house < 11)
+	{
+		for (int i = 0; i <= seedsLeft; i++)
+			GenerateStates(seedsLeft - i, board | (uint64_t)i << (house * 5), house + 1);
+	}
+	else
+	{
+		board |= (uint64_t)seedsLeft << 55;
+		allBoards[stateCount++] = board;
+	}
+}
+
 void PrintBoard(uint64_t board)
 {
 	string myBoard = "";
@@ -194,22 +210,6 @@ void PrintBoard(uint64_t board)
 	std::cerr << myBoard << endl;
 }
 
-uint64_t allBoards[10000000] = { 0 };
-int stateCount = 0;
-
-void GenerateStates(int seedsLeft, uint64_t board, int house)
-{
-	if (house < 11)
-	{
-		for (int i = 0; i <= seedsLeft; i++)
-			GenerateStates(seedsLeft - i, board | (uint64_t)i << (house * 5), house + 1);
-	}
-	else
-	{
-		board |= (uint64_t)seedsLeft << 55;
-		allBoards[stateCount++] = board;
-	}
-}
 
 int main()
 {
