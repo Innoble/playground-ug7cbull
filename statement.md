@@ -9,15 +9,15 @@ Imagine using this inside a search, for example in a monte carlo tree search or 
 There are several types of "end result". It can be a WLD data base (win/loss/draw). It can also be a DTM database (depth to mate), which tells you how long it takes to win (or lose) from this state. 
 For oware we are using neither of those two. 
 
-We are interested in how much net-score you can gain from a gamestate. Gamestates are "scoreless" in this sense. The current score doesn't matter for the lookup itself. For example, say the current score is 21-20 and the lookup tells you -3, you know the second player has won, because he is only 1 behind and will gain a net 3 points. But if the score is 24-17, player 1 still wins.
+We are interested in how much net-score you can gain from a gamestate, assuming both sides play perfectly. Gamestates are "scoreless" in this sense. Whatever the current score is, has no bearing on which moves give the maximum net-score. So the current score doesn't matter for the lookup itself. For example, say the current score is 21-20 and the lookup tells you -3, you know the second player has won, because he is only 1 behind and will gain a net 3 points. But if the score is 24-17, player 1 still wins.
 
 # Turn limit
 
-Oware has a turn limit (200 turns). I use the word turn to mean "ply" here for those who know the lingo, just a single move by either player. This turn limit makes things a bit more complicated. When a gamestate has only 1 turn left, the net score will often be different than when it has 2 turns left. Depending on the number of seeds on the board, the turn limit may have effect even when 100+ turns are left to play. Oware has very long strategies and if the game ends halfway through one of them, then not all points will have been scored.
+Oware has a turn limit (200 turns). I use the word turn to mean "ply" here for those who know the lingo, just a single move by either player. This turn limit makes things a bit more complicated. When a gamestate has only 1 turn left, the net score will often be different than when it has 2 turns left. Depending on the number of seeds on the board, the turn limit may have effect even when 100+ turns are left to play. Oware has very long strategies and if the game ends halfway through one of them, then not all points will have been scored and the net-score will be different.
 
 # Seed count
 
-The more seeds are on the board, the more states are possible. With 1 seed on the board, there are only 12 states, 2 seeds give you 78 states and so on. See the table below:
+The more seeds are on the board, the more states are possible. With one seed on the board, there are only 12 possible states. Two seeds give you 78 possible states and so on. See the table below:
 
 | Number of seeds on the board | Number of possible states | Cumulative |
 |------------------------------|---------------------------|------------|
@@ -33,15 +33,15 @@ The more seeds are on the board, the more states are possible. With 1 seed on th
 | 10                           | 352716                    | 646645     |
 
 
-I've been able to generate books with a maximum of 9 seeds on the board in half a second. Having a maximum of 9 seeds will give you nearly 300k states. However, since we need to know their net score for every amount of turns left, you have to multiply by another 200. In the end this comes down to a total of roughly 60 million gamestates. You can reduce this a little bit once you realize state values repeat after a certain number of turns left. For 9 seeds this happens at 146 turns left.
+I've been able to generate books with a maximum of 9 seeds on the board in half a second. Having a maximum of 9 seeds will give you nearly 300k states. However, since we need to know their net-score for every amount of turns left, you have to multiply by another 200. In the end this comes down to a total of roughly 60 million gamestates. You can reduce this a little bit once you realize state values repeat after a certain number of turns left. For 9 seed gamestates this happens at 146 turns left or more.
 
 Also this number is a slight overestimation of the number of states, because some states can't be reached. For example, the player that has just moved always has to have at least 1 empty hole. We ignore this to simplify things. 
 
 # Indexing the lookups
 
-When you generate the endgame book, you need to store it somehow. It is possible to hash the gamestate and use a hashtable like c++'s unordered map, or your own implementation of a hashtable. However, this will be extremely slow. It's better to use a so-called index-function. That way you have the data in an array that is as compact as possible. An array lookup is much faster than a hashtable. During the generation of the book, you also keep using earlier calculated results, so lookups will be the main bottleneck.
+When you generate the endgame book, you need to store it somehow. It is possible to hash the gamestate and use a hashtable like an unordered map, or your own implementation of a hashtable. However, this will be quite slow and use more memory. It's better to use a so-called index-function. That way you have the data in an array that is as compact as possible. An array lookup is much faster than a hashtable. During the generation of the book, you also keep using earlier calculated results, so lookups will be the main bottleneck.
 
-Index functions are quite complicated however. It took a lot of thinking for me to figure out a good one for oware. The first order of business is to create a way to count the number of possible states. The result of this you can see in the table above. Run the code below to see how this works. The code uses math, but I would not know how to explain it quickly. It is basic math however and just calculates the amount of ways you can distribute x seeds over y pits. The reason I kept the number of pits variable will become clear later. Most of what you see in the function are factorials. This type of math easily overflows, which is why the function looks a little weird and has 64 bit integers. 
+Index functions are quite complicated however. It took a lot of thinking for me to figure one out for oware. The first order of business is to create a way to count the number of possible states. The result of this you can see in the table above. Run the code below to see how this works. The code uses math, but I would not know how to explain it quickly. It is basic math however and just calculates the amount of ways you can distribute x seeds over y pits. The reason I kept the number of pits variable will become clear later. Most of what you see in the function are factorials. This type of math easily overflows, which is why the function looks a little weird and has 64 bit integers. 
 
 ```C++ runnable
 #include <iostream>
@@ -84,7 +84,7 @@ int main()
 ```
 # Caching state counts
 
-We will have to count states a lot, so it's better to cache the result. During the use of the index function we go through the board from pit 0 to 11. On each pit we have to ask the question, how many distributions of seeds are still possible with the remaining pits (index larger than the current pit). The function below fills an array that caches this result. 
+We will have to count states a lot, so it's better to cache the results. During the use of the index function we go through the board from pit 0 to 11. On each pit we have to ask the question, how many distributions of seeds are still possible with the remaining pits (those with index larger than the current pit). The function below fills an array that caches this result. 
 
 ```C++
 void FillStateCountLookups()
@@ -136,7 +136,7 @@ Next we make a state with 1 seed in pit 2. That means the remaining seeds go in 
 | 1     | 1      | 1     |
 | 2     | 0      | 2     |
 
-Because there are 3 ways to do this, there are 3 states with 1 seed in pit 1. The sub-results of index 0,1,2 are added, leading to indices 4, 5 and 6. And so on. Hopefully this gives some idea of how it works. As I said, it's complicated.
+Because there are 3 ways to do this, there are 3 states with 1 seed in pit 1. The sub-results of index 0,1,2 are added, leading to indices 4, 5 and 6. And so on. Hopefully this gives some idea of how it works. As I said, it's complicated. If you really want to understand the math, you will have to work it out for yourself on a piece of paper. 
 
 The final code for the index function is as follows: 
 
@@ -156,11 +156,12 @@ uint64_t IndexFunction(uint64_t state, int total) // assume state has pits with 
 }
 ```
 
-My oware boardstate is always fully contained in a 64 bit integer. This makes things complicated when there are more than 31 seeds in a pit, as you only have 5 bits per pit. I use the 4 bits that are left (12*5 = 60), to handle the overflow. For our purposes, this does not matter. We are only looking at low seedcounts.  
+My oware boardstate is always fully contained in a 64 bit integer. This makes things complicated when there are more than 31 seeds in a pit, as you only have 5 bits per pit. I use the 4 bits that are left (12*5 = 60), to handle the overflow. For our purposes, this does not matter. We are only looking at low seedcounts for the endgame book.  
 
 # Generating the gamestates
 
-The recursive function below is used to generate the states. It is quite simple to understand. We again walk through the pits, trying all possible amounts of seeds for the current pit and recursively finishing the state. You call the function by starting with an empty board and at house index 0. The "seedsLeft" variable has to be whatever amount of seeds you want there to be on the board. You can run the code, but be careful not to call the function with too many seeds. You'll get an enormous amount of output.
+The recursive function below is used to generate the states. It is quite simple to understand. We again walk through the pits, trying all possible amounts of seeds for the current pit and recursively finishing the state. You call the function by starting with an empty board and at house index 0. The "seedsLeft" variable has to be whatever amount of seeds you want there to be on the board. You can run the code below, but be careful not to call the function with too many seeds. You'll get an enormous amount of output and it will start skipping.
+
 ```C++ runnable
 #include <iostream>
 #include <string>
@@ -218,5 +219,270 @@ int main()
 		cerr << "index: " << i << endl;
 		PrintBoard(allBoards[i]);		
 	}
+}
+```
+
+# Retrograde analysis
+
+The final code does a process called "retrograde analysis", the "retro" refers to going backwards. You start at the very last turn of the game, which is turn 200 and calculate the net-scores for all the states, then you do the same at turn 199. The net-score of turn 199 is the capture score minus the netscore of the opponent at turn 200. For this we need to flip the board. We keep doing this all the way to turn 1. Actually... I stop at turn 200-146 = 54. This is because all the net-scores of turn 1 to 53 are identical to turn 54. Apparently there are no strategies longer than 146 turns at 9 seeds on the board. 
+
+It's not possible for me to share the whole code for generating the book, as it would also mean sharing my whole sim. However, below here you find almost the entire working code. The only difference is that the "apply move" function doesn't do anything. This barely matters for the speed in my case, so you can use the runnable below to see how fast the book generates. You can set END_GAME_SEEDS from 1 to 9.
+
+```C++ runnable
+#pragma GCC optimize("Ofast","unroll-loops", "omit-frame-pointer", "inline")
+#pragma GCC option("arch=native", "tune=native", "no-zero-upper")
+#pragma GCC target("rdrnd", "popcnt", "avx", "bmi2")
+
+#include <iostream>
+#include <math.h>
+#include <string>
+#include <chrono>
+
+using namespace std;
+
+const int END_GAME_SEEDS = 9;
+const int SEED_9_STATECOUNT = 293929;
+const int PATTERN_LIMIT = 146;
+int stateCounts[END_GAME_SEEDS + 1][END_GAME_SEEDS + 1][11] = { 0 };
+
+uint64_t StateCounter(int64_t pits, int64_t seeds)
+{
+	int64_t top = 1;
+	int64_t bottom = 1;
+	if (pits > seeds)
+	{
+		for (int64_t i = seeds + 1; i <= seeds + pits - 1; i++)
+			top *= i;
+
+		for (int64_t i = 2; i <= (pits - 1); i++)
+			bottom *= i;
+	}
+	else
+	{
+		for (int64_t i = pits; i <= seeds + pits - 1; i++)
+			top *= i;
+
+		for (int64_t i = 2; i <= seeds; i++)
+			bottom *= i;
+	}
+
+	return top /= bottom;
+}
+
+void FillStateCountLookups()
+{
+	for (int left = 0; left <= END_GAME_SEEDS; left++) // how many seeds are left to distribute
+	{
+		for (int house = 0; house < 11; house++)
+		{
+			for (int seeds = 0; seeds <= left; seeds++) // how many seeds are in the current pit
+			{
+				uint64_t index = 0;
+				for (int j = 0; j < seeds; j++)
+				{
+					uint64_t stateCount = StateCounter(11 - house, left - j);
+					index += stateCount;
+				}
+
+				stateCounts[left][seeds][house] = index;
+			}
+		}
+	}
+}
+
+uint64_t IndexFunction(uint64_t state, int total) // assume state has pits with 31 seeds max, spaced as 5 bit
+{
+	uint64_t index = 0;
+	int left = total;
+
+	for (int house = 0; house < 11; house++)
+	{
+		int seeds = 31 & (state >> (house * 5));
+		index += stateCounts[left][seeds][house];
+		left -= seeds;
+	}
+	return index;
+}
+
+uint64_t FlipBoard(uint64_t board) // flips p1 and p2 if you want to do a lookup from the other player's perspective
+{
+	uint64_t p1 = board & 0x3FFFFFFF;
+	uint64_t p2 = (board >> 30) & 0x3FFFFFFF;
+	uint64_t extra = (board >> 60); // ignore this part, this is because my bot stores seeds > 31 beyond the 60th bit
+	return extra << 60 | p1 << 30 | p2;
+}
+
+int SeedsOnBoard(uint64_t board)
+{
+	int total = board >> 60; // this is the seed overflow again, ignore this
+
+	for (int i = 0; i < 60; i = i + 5)
+		total += (board >> i) & 31;
+
+	return total;
+}
+
+inline bool PlayerHasSeeds(int player, uint64_t board)
+{
+	return ((board >> (30 * player)) & 0x3FFFFFFF) > 0;
+}
+
+inline bool HouseHasSeeds(int houseIndex, int playerIndex, uint64_t board)
+{
+	int houseShift = 5 * (6 * playerIndex + houseIndex);
+	return (board & (31ULL << houseShift)) > 0;
+}
+
+inline int GetPlayerSeeds(int player, uint64_t board)
+{
+	uint32_t playerBoard = board >> (30 * player);
+	int playerSeeds = 0;
+	for (int i = 0; i < 6; i++)
+		playerSeeds += (playerBoard >> (5 * i)) & 31;
+
+	return playerSeeds;
+}
+
+int ApplyMove(int house, uint64_t& board) 
+{
+	int captured = 0;
+	// this is your sim, it applies the move to the board and returns the number of captured seeds
+	return captured;
+}
+
+struct SimCache
+{
+	uint64_t board;
+	int childIndexBuffer[6];
+	int8_t capturedBuffer[6];
+	int8_t moveCount;
+	int8_t currentSeeds;
+
+	SimCache() {};
+};
+
+SimCache simCache[SEED_9_STATECOUNT]; // this stores all results from the sim, this is a performance boost
+int stateCount = 0;
+int8_t netScores[SEED_9_STATECOUNT * PATTERN_LIMIT]; // The endgame values remain the same beyond 146 turns left, so we need not go further
+int arrayStarts[END_GAME_SEEDS + 1]; // +1 because of convenience. boards with 0 seeds don't exist. 
+
+inline int GetSeedScore(uint64_t childBoard, int turnsLeft) // this is also the function you use during a game, to get the net score of the board.
+{
+	if (turnsLeft > PATTERN_LIMIT)
+		turnsLeft = PATTERN_LIMIT;// - turnsLeft & 1;
+	int seedsOnBoard = SeedsOnBoard(childBoard);
+	int stateIndex = arrayStarts[seedsOnBoard] + IndexFunction(childBoard, seedsOnBoard);
+	int index = (turnsLeft - 1) * stateCount + stateIndex;
+
+	return netScores[index];
+}
+
+inline void SetSeedScore(int stateIndex, int turnsLeft, int seeds)
+{
+	netScores[(turnsLeft - 1) * stateCount + stateIndex] = seeds;
+}
+
+void GenerateStates(int seedsLeft, uint64_t board, int house, int current)
+{
+	if (house < 11)
+	{
+		for (int i = 0; i <= seedsLeft; i++)
+			GenerateStates(seedsLeft - i, board | (uint64_t)i << (house * 5), house + 1, current);
+	}
+	else
+	{
+		board |= (uint64_t)seedsLeft << 55;
+		simCache[stateCount].currentSeeds = current;
+		simCache[stateCount++].board = board;
+	}
+}
+
+int ApplyMove(int house, uint64_t childBoard, int player)
+{
+	// Your sim goes here
+	return 0;
+}
+
+void GenerateBook()
+{
+	stateCount = 0;
+
+	for (int currentSeeds = 1; currentSeeds <= END_GAME_SEEDS; currentSeeds++)
+	{
+		arrayStarts[currentSeeds] = stateCount; // the net-score array for 1 seed on the board starts at 0, for 2 seeds and up it does not
+		GenerateStates(currentSeeds, 0, 0, currentSeeds);
+	}
+
+	for (int s = 0; s < stateCount; s++) // the first loop calculates the final turn's score (turn 200). 
+	{
+		uint64_t board = simCache[s].board;
+
+		int moveCount = 0;
+		int bestScore = -100;
+
+		for (int house = 0; house < 6; house++)
+		{
+			if (!HouseHasSeeds(house, 0, board))
+				continue;
+
+			uint64_t childBoard = board;
+			int captured = ApplyMove(house, childBoard, 0); // this sim doesn't do anything, implement your own sim
+			bestScore = max(captured, bestScore); // this is just a minimax-type "play the best move" thing
+
+			if (!PlayerHasSeeds(1, childBoard)) // moves that leave no opponent seeds are disallowed.
+				continue;
+			else
+			{
+				int seedsLeft = simCache[s].currentSeeds - captured;
+				simCache[s].capturedBuffer[moveCount] = captured;
+				simCache[s].childIndexBuffer[moveCount] = arrayStarts[seedsLeft] + IndexFunction(FlipBoard(childBoard), seedsLeft);
+				// we lookup the index of the child with the index-function and store it in the simcache
+				// the board needs to be flipped to do the lookup because the child is looked up from the opponents perspective
+				moveCount++;
+			}
+		}
+		simCache[s].moveCount = moveCount;
+		if (moveCount == 0)
+			bestScore = GetPlayerSeeds(0, board); // if no moves are allowed, the current player gets all seeds.
+
+		SetSeedScore(s, 1, bestScore); // this sets the netscore in the endgame book
+	}
+
+	for (int turnsLeft = 2; turnsLeft <= PATTERN_LIMIT; turnsLeft++) // same process, only now we use the sim cache
+	{
+		int seed = 1;
+		int arrayStart = 0;
+		for (int s = 0; s < stateCount; s++)
+		{
+			int bestScore = -100;
+
+			if (simCache[s].moveCount == 0)
+				bestScore = GetPlayerSeeds(0, simCache[s].board);
+			else
+			{
+				for (int m = 0; m < simCache[s].moveCount; m++)
+				{
+					int captured = simCache[s].capturedBuffer[m];
+					int childIndex = simCache[s].childIndexBuffer[m];
+					int score = captured - netScores[(turnsLeft - 2) * stateCount + childIndex]; // minus 2 because it's a child and turnsleft starts at 1
+					// you need the netscore of the next turn (with a minus sign) and you add the captured score
+					bestScore = max(score, bestScore);
+				}
+			}
+
+			SetSeedScore(s, turnsLeft, bestScore);
+		}
+	}
+}
+
+int main()
+{
+	auto start = std::chrono::high_resolution_clock::now();
+	FillStateCountLookups();
+	GenerateBook();
+	auto end = std::chrono::high_resolution_clock::now();
+	long calcTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+	std::cerr << "End games done. Time: " << calcTime << " ms. States: " << stateCount << endl;
 }
 ```
