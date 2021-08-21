@@ -224,9 +224,9 @@ int main()
 
 # Retrograde analysis
 
-The final code does a process called "retrograde analysis", the "retro" refers to going backwards. You start at the very last turn of the game, which is turn 200 and calculate the net-scores for all the states, then you do the same at turn 199. The net-score of turn 199 is the capture score minus the netscore of the opponent at turn 200. For this we need to flip the board. We keep doing this all the way to turn 1. Actually... I stop at turn 200-146 = 54. This is because all the net-scores of turn 1 to 53 are identical to turn 54. Apparently there are no strategies longer than 146 turns at 9 seeds on the board. 
+The final code does a process called "retrograde analysis". The "retro" part means going backwards. You start at the very last turn of the game, which is turn 200 and calculate the net-scores for all the states, then you do the same at turn 199. The net-score of turn 199 is the capture score minus the netscore of the opponent at turn 200. For this we need to flip the board (switch player sides). We keep doing this all the way to turn 1. Actually... I stop at turn 200-146 = 54. This is because all the net-scores of turn 1 to 53 are identical to turn 54. Apparently there are no strategies longer than 146 turns at 9 seeds on the board. 
 
-It's not possible for me to share the whole code for generating the book, as it would also mean sharing my whole sim. However, below here you find almost the entire working code. The only difference is that the "apply move" function doesn't do anything. This barely matters for the speed in my case, so you can use the runnable below to see how fast the book generates. You can set END_GAME_SEEDS from 1 to 9.
+It's not possible for me to share the whole code for generating the book, as it would also mean sharing my whole sim and I don't currently want to share that part. However, below here you find almost the entire working code. The only difference is that the "apply move" function doesn't do anything. This barely matters for the speed in my case, so you can use the runnable below to see how fast the book generates. You can set END_GAME_SEEDS from 1 to 9.
 
 ```C++ runnable
 #pragma GCC optimize("Ofast","unroll-loops", "omit-frame-pointer", "inline")
