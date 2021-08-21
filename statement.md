@@ -366,7 +366,9 @@ int stateCount = 0;
 int8_t netScores[SEED_9_STATECOUNT * PATTERN_LIMIT]; // The endgame values remain the same beyond 146 turns left, so we need not go further
 int arrayStarts[END_GAME_SEEDS + 1]; // +1 because of convenience. boards with 0 seeds don't exist. 
 
-inline int GetSeedScore(uint64_t childBoard, int turnsLeft) // this is also the function you use during a game, to get the net score of the board.
+inline int GetSeedScore(uint64_t childBoard, int turnsLeft) 
+// this is also the function you use during a game, to get the net score of the board.
+// it assumes the bottom player is to move. If this is not the case, the board needs to be flipped first
 {
 	if (turnsLeft > PATTERN_LIMIT)
 		turnsLeft = PATTERN_LIMIT;// - turnsLeft & 1;
